@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/ios_background"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/tv_userscript_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:fontFamily="sans-serif-medium"
+        android:paddingTop="4dp"
+        android:paddingBottom="8dp"
+        android:text="@string/popup_menu_item_userscript"
+        android:textColor="@color/ios_text_primary"
+        android:textSize="18sp" />
+
+    <TextView
+        android:id="@+id/tv_userscript_dir"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/tv_userscript_title"
+        android:lineSpacingExtra="2dp"
+        android:paddingBottom="8dp"
+        android:textColor="@color/ios_text_secondary"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:id="@+id/layout_userscript_actions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:orientation="horizontal"
+        android:paddingTop="8dp">
+
+        <TextView
+            android:id="@+id/btn_userscript_import"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/popup_menu_border"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:text="@string/userscript_import"
+            android:textColor="@color/menu_text_color"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/btn_userscript_new"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/popup_menu_border"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:text="@string/userscript_new"
+            android:textColor="@color/menu_text_color"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/btn_userscript_refresh"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@drawable/popup_menu_border"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:text="@string/userscript_refresh"
+            android:textColor="@color/menu_text_color"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@id/layout_userscript_actions"
+        android:layout_below="@id/tv_userscript_dir">
+
+        <ListView
+            android:id="@+id/lv_userscript"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/popup_menu_border"
+            android:divider="@color/ios_separator"
+            android:dividerHeight="1dp"
+            android:scrollbars="none" />
+
+        <TextView
+            android:id="@+id/tv_userscript_empty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:padding="16dp"
+            android:text="@string/userscript_empty"
+            android:textColor="@color/ios_text_secondary"
+            android:textSize="13sp" />
+    </FrameLayout>
+</RelativeLayout>

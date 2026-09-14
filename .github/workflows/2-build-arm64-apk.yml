@@ -1,27 +1,28 @@
 # ============================================================================
-# ② 编译 arm64-v8a 的 release APK（手动触发）
+# ② 编译 arm64-v8a 的 release APK，并发布到固定 Release（手动触发）
 #
 # 产出文件：AListLite-v<版本号>-arm64-v8a-release-signed.apk
-#           （<版本号> 直接读 app/build.gradle 里的 versionName，
-#             当前仓库为 3.0.1-auto7，所以文件名就是
-#             AListLite-v3.0.1-auto7-arm64-v8a-release-signed.apk）
+#          （<版本号> 读自 app/build.gradle 的 versionName，当前为 3.0.1-auto7）
 #
-# 流程：检出代码 → 编译 Go 后端为 AAR → Gradle 打包 release APK
-#       → 用你自己的密钥签名 → 上传为可下载的 Artifact
+# 发布位置：固定 tag `nightly` 的 Release，同名资产每次覆盖上传，
+#          所以下载地址永久固定（走 Release CDN，比 Actions Artifact 快）：
+#          https://github.com/Kano-u/AListLiteAndroid/releases/download/nightly/AListLite-v3.0.1-auto7-arm64-v8a-release-signed.apk
 # ============================================================================
 
-name: 2-编译 arm64-v8a APK
+name: 2-编译并发布 arm64 APK
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    env:
+      RELEASE_TAG: nightly
 
     steps:
       - name: 1-检出代码
@@ -29,7 +30,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 2-准备 Android SDK（提供 apksigner / zipalign）
+      - name: 2-准备 Android SDK（apksigner / zipalign）
         uses: android-actions/setup-android@v3
 
       - name: 3-安装 JDK 17
@@ -91,23 +92,25 @@ jobs:
           sh install_alist.sh      # 下载最新 OpenList 源码与前端产物，并打上项目定制补丁
           sh install_gomobile.sh   # 安装 gomobile
           sh build_aar.sh          # gomobile bind 生成 AAR 并复制到 app/libs/
-          # 兜底：把生成的所有 AAR 都放进 app/libs（app 里同时用到了 alistlib 和 alitvlib）
-          cp -fv "$GITHUB_WORKSPACE/AListLib/sources/"*.aar "$GITHUB_WORKSPACE/app/libs/"
+          ls -lh "$GITHUB_WORKSPACE/app/libs/"
 
       - name: 9-确认 app/libs 里的 AAR
         run: ls -lh app/libs/
 
-      - name: 10-打包 release APK
+      - name: 10-运行单元测试
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: 11-打包 release APK
         run: |
           set -euo pipefail
           chmod +x gradlew
           ./gradlew assembleRelease --stacktrace
 
-      - name: 11-列出 Gradle 产物（便于排查）
+      - name: 12-列出 Gradle 产物（便于排查）
         if: always()
         run: ls -lh app/build/outputs/apk/release/ || true
 
-      - name: 12-签名 arm64-v8a APK
+      - name: 13-签名 arm64-v8a APK
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_SIGNING_KEY }}
           STORE_PASS: ${{ secrets.ANDROID_KEY_STORE_PASSWORD }}
@@ -145,10 +148,38 @@ jobs:
           ls -lh "$OUT"
           sha256sum "$OUT"
 
-      - name: 13-上传 APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: AListLite-v${{ env.VERSION_NAME }}-arm64-v8a-signed
-          path: AListLite-v${{ env.VERSION_NAME }}-arm64-v8a-release-signed.apk
-          if-no-files-found: error
-          retention-days: 30
+      - name: 14-发布到固定 Release（同名资产覆盖）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          APK="AListLite-v${VERSION_NAME}-arm64-v8a-release-signed.apk"
+          TITLE="自编译构建（${RELEASE_TAG}）"
+          NOTES_FILE="$RUNNER_TEMP/release-notes.md"
+          cat > "$NOTES_FILE" <<EOF
+          - App 版本：v${VERSION_NAME}
+          - 内嵌 OpenList：v${OPENLIST_VERSION}
+          - 架构：arm64-v8a
+          - 提交：${GITHUB_SHA}
+          - 分支：${GITHUB_REF_NAME}
+          - 构建时间：$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          - 运行记录：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          固定下载地址：
+          ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${APK}
+          EOF
+          cat "$NOTES_FILE"
+
+          # 让 nightly 标签始终指向本次构建的提交
+          git tag -f "$RELEASE_TAG" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$RELEASE_TAG"
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --title "$TITLE" --notes-file "$NOTES_FILE" --prerelease
+            gh release upload "$RELEASE_TAG" "$APK" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$APK" --title "$TITLE" --notes-file "$NOTES_FILE" --prerelease
+          fi
+
+          echo "---- Release 现有资产 ----"
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name'

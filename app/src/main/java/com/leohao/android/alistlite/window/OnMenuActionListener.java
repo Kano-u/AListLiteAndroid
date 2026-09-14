@@ -20,6 +20,8 @@ public interface OnMenuActionListener {
 
     void manageConfigData(View view);
 
+    void manageUserScripts(View view);
+
     void showServiceLogs(View view);
 
     void checkUpdates(View view);

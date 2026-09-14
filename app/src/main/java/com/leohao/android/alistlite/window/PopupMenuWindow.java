@@ -97,6 +97,11 @@ public class PopupMenuWindow extends PopupWindow {
             dismiss();
             listener.manageConfigData(view);
         });
+        //脚本管理
+        popupView.findViewById(R.id.btn_manageUserScripts).setOnClickListener((view) -> {
+            dismiss();
+            listener.manageUserScripts(view);
+        });
         //服务日志
         popupView.findViewById(R.id.btn_serviceLogs).setOnClickListener((view) -> {
             dismiss();

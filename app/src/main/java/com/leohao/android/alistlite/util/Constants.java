@@ -13,6 +13,25 @@ import java.util.Map;
  */
 public class Constants {
     public static String OPENLIST_VERSION = "4.2.6";
+
+    // ==================== 油猴脚本（UserScript）====================
+
+    /**
+     * 脚本存放目录（相对外部存储根目录）
+     */
+    public static String USER_SCRIPT_DIR_NAME = "AListLite/userscripts";
+    /**
+     * 脚本注入时使用的 JS 桥名称（window.xxx）
+     */
+    public static String JS_INTERFACE_USER_SCRIPT = "AlistLiteUserscript";
+    /**
+     * 脚本启用状态的存储键前缀
+     */
+    public static String SHARED_DATA_KEY_USER_SCRIPT_ENABLED_PREFIX = "user_script_enabled_";
+    /**
+     * 脚本 GM 存储值的键前缀
+     */
+    public static String SHARED_DATA_KEY_USER_SCRIPT_VALUE_PREFIX = "user_script_value_";
     public static String ALIST_CONFIG_FILENAME = "config.json";
     public static String ALIST_STORAGE_DRIVER_MOUNT_PATH = "本地存储";
     public static String ALIST_DEFAULT_PASSWORD = "123456";

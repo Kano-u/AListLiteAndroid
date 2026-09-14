@@ -12,3 +12,13 @@
 .externalNativeBuild
 .cxx
 /.idea/
+
+# 签名密钥与密钥压缩包：绝对不能入库
+*.jks
+*.keystore
+alistlite-keystore.zip
+
+# AListLib 构建中间产物（只在 CI / 本地构建时生成）
+AListLib/sources/*.aar
+AListLib/sources/*-sources.jar
+AListLib/scripts/*.tar.gz

@@ -227,6 +227,24 @@
                     android:text="@string/popup_menu_item_advanced_config"/>
 
             <TextView
+                    android:id="@+id/btn_manageUserScripts"
+                    android:drawableStart="@drawable/ic_menu_userscript"
+                    android:drawablePadding="12dp"
+                    android:focusable="true"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingTop="11dp"
+                    android:paddingBottom="11dp"
+                    android:textSize="15sp"
+                    android:textColor="@color/menu_text_color"
+                    android:fontFamily="sans-serif"
+                    android:clickable="true"
+                    android:background="?attr/selectableItemBackground"
+                    android:text="@string/popup_menu_item_userscript"/>
+
+            <TextView
                     android:id="@+id/btn_showAliTvTokenGetPage"
                     android:drawableStart="@drawable/ic_menu_key"
                     android:drawablePadding="12dp"

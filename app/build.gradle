@@ -18,8 +18,9 @@ android {
         abi {
             enable true
             reset()
-            include 'x86', 'armeabi-v7a', 'x86_64', 'arm64-v8a'
-            universalApk true
+            // 自编译版本只针对 arm64-v8a 出包（Go 后端也只编译该架构）
+            include 'arm64-v8a'
+            universalApk false
         }
     }
     buildTypes {

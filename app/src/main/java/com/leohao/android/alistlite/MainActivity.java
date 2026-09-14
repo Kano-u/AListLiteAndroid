@@ -9,6 +9,7 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
+import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -45,10 +46,13 @@ import com.leohao.android.alistlite.interfaces.DownloadBlobFileJsInterface;
 import com.leohao.android.alistlite.model.Alist;
 import com.leohao.android.alistlite.service.AlistService;
 import com.leohao.android.alistlite.service.AlistTileService;
+import com.leohao.android.alistlite.userscript.UserscriptInjector;
+import com.leohao.android.alistlite.userscript.UserscriptJsInterface;
 import com.leohao.android.alistlite.util.*;
 import com.leohao.android.alistlite.window.DialogHelper;
 import com.leohao.android.alistlite.window.OnMenuActionListener;
 import com.leohao.android.alistlite.window.PopupMenuWindow;
+import com.leohao.android.alistlite.window.UserscriptManagerDialog;
 
 import java.io.IOException;
 import java.util.*;
@@ -163,6 +167,10 @@ public class MainActivity extends AppCompatActivity implements OnMenuActionListe
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        // 脚本管理：导入脚本的文件选择结果
+        if (UserscriptManagerDialog.handleActivityResult(this, requestCode, resultCode, data)) {
+            return;
+        }
         if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
             if (mFilePathCallback != null) {
                 Uri[] results = null;
@@ -250,6 +258,8 @@ public class MainActivity extends AppCompatActivity implements OnMenuActionListe
         webView.getSettings().setAllowContentAccess(true);
         webView.removeJavascriptInterface("searchBoxJavaBredge_");
         webView.addJavascriptInterface(new DownloadBlobFileJsInterface(this), "Android");
+        // 油猴脚本桥：脚本通过它取回匹配的脚本列表、读写 GM 存储与打印日志
+        webView.addJavascriptInterface(new UserscriptJsInterface(), Constants.JS_INTERFACE_USER_SCRIPT);
         webView.setWebChromeClient(new WebChromeClient() {
             private View mCustomView;
             private CustomViewCallback mCustomViewCallback;
@@ -334,6 +344,15 @@ public class MainActivity extends AppCompatActivity implements OnMenuActionListe
                                 "    origClick.call(this);" +
                                 "  };" +
                                 "})();", null);
+                // 注入油猴脚本（document-end / document-idle 时机）
+                UserscriptInjector.inject(view, url, UserscriptInjector.MODE_END);
+            }
+
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                // @run-at document-start 的脚本尽早注入（Android WebView 无原生 userScript API，属尽力而为）
+                UserscriptInjector.inject(view, url, UserscriptInjector.MODE_START);
             }
 
             @Override
@@ -699,6 +718,11 @@ public class MainActivity extends AppCompatActivity implements OnMenuActionListe
     @Override
     public void manageConfigData(View view) {
         DialogHelper.showConfigEditor(this);
+    }
+
+    @Override
+    public void manageUserScripts(View view) {
+        UserscriptManagerDialog.show(this);
     }
 
     @Override
