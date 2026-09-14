@@ -1,0 +1,65 @@
+# ============================================================================
+# ① 生成签名密钥（只需要运行一次）
+#
+# 为什么需要：Android 要求 APK 必须签名才能安装。官方发布的 APK 用的是作者
+# 自己的密钥，你无法用它签名，所以要在云端生成一个属于你自己的密钥。
+#
+# 用法：下载 release.jks 保存好（丢了以后就无法覆盖安装新版本），
+#      再把它的 Base64 内容填入仓库 Secret（见教程）。
+# ============================================================================
+
+name: 1-生成签名密钥（只运行一次）
+
+on:
+  workflow_dispatch:
+    inputs:
+      key_alias:
+        description: '密钥别名 keyAlias（保持默认即可）'
+        required: true
+        default: 'alistlite'
+      store_password:
+        description: 'keystore 密码（自己设，至少 6 位，字母数字即可，务必记住）'
+        required: true
+      key_password:
+        description: '密钥密码（自己设，至少 6 位，字母数字即可，务必记住）'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  create-key:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1-安装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 2-生成 keystore
+        env:
+          ALIAS: ${{ inputs.key_alias }}
+          STORE_PASS: ${{ inputs.store_password }}
+          KEY_PASS: ${{ inputs.key_password }}
+        run: |
+          set -euo pipefail
+          keytool -genkeypair -v \
+            -keystore release.jks \
+            -storetype JKS \
+            -alias "$ALIAS" \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass "$STORE_PASS" \
+            -keypass "$KEY_PASS" \
+            -dname "CN=AListLite Personal Build, OU=Personal, O=Personal, L=Unknown, ST=Unknown, C=CN"
+          echo "---- 生成结果校验 ----"
+          keytool -list -v -keystore release.jks -storepass "$STORE_PASS" -alias "$ALIAS" | head -n 12
+
+      - name: 3-上传 keystore（从这次运行的 Artifacts 区域下载）
+        uses: actions/upload-artifact@v4
+        with:
+          name: alistlite-keystore
+          path: release.jks
+          if-no-files-found: error
+          retention-days: 7
