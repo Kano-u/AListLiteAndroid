@@ -108,10 +108,9 @@ public class AlistService extends Service {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     updateAlistTileServiceState(AlistTileService.ACTION_TILE_ON);
                 }
-                // 仅在服务实际被启动时提示，避免重复 Toast
+                // 仅在服务实际被启动时记录日志（不再弹 Toast：启动提示比较打扰）
                 if (justStarted) {
-                    String toastMsg = alistServer.isHttpsEnabled() ? "AList 服务已开启（HTTPS 加密）" : "AList 服务已开启";
-                    showToast(toastMsg);
+                    Log.i(TAG, alistServer.isHttpsEnabled() ? "AList 服务已开启（HTTPS 加密）" : "AList 服务已开启");
                 }
             } catch (Exception e) {
                 Log.e(TAG, e.getLocalizedMessage());
