@@ -3,6 +3,7 @@ package com.leohao.android.alistlite;
 import com.jayway.jsonpath.JsonPath;
 import com.leohao.android.alistlite.util.AppUtil;
 import org.apache.commons.io.FileUtils;
+import org.junit.Assume;
 import org.junit.Test;
 
 import java.io.File;
@@ -17,6 +18,11 @@ import static org.junit.Assert.*;
  * @see <a href="http://d.android.com/tools/testing">Testing documentation</a>
  */
 public class ExampleUnitTest {
+    /**
+     * 该测试原本依赖作者本机的配置文件，配置不存在时跳过（例如 CI 环境）
+     */
+    private static final String LOCAL_CONFIG_PATH = "C:\\Users\\LeoHao\\Desktop\\config.json";
+
     @Test
     public void addition_isCorrect() {
         assertEquals(4, 2 + 2);
@@ -24,6 +30,8 @@ public class ExampleUnitTest {
 
     @Test
     public void configReadTest() throws IOException {
+        Assume.assumeTrue("本机不存在 " + LOCAL_CONFIG_PATH + "，跳过该测试",
+                new File(LOCAL_CONFIG_PATH).isFile());
         System.out.println(getConfigValue("scheme.http_port"));
     }
 
@@ -35,7 +43,7 @@ public class ExampleUnitTest {
     }
 
     public Object getConfigValue(String jsonPath) throws IOException {
-        File configFile = new File("C:\\Users\\LeoHao\\Desktop\\config.json");
+        File configFile = new File(LOCAL_CONFIG_PATH);
         String configString = FileUtils.readFileToString(configFile, StandardCharsets.UTF_8);
         return JsonPath.read(configString, jsonPath);
     }
