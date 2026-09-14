@@ -1,0 +1,100 @@
+# ============================================================================
+# ⓞ 编译检查（push 自动触发；不签名、不发布）
+#
+# 目的：改完代码 push 后，用最快的路径确认「Java 能编译 + 单元测试通过 +
+#      APK 能打包」。它只读取 Go 后端缓存（不写入），因此不会干扰
+#      2 号发布工作流的缓存；缓存里没有 AAR 时会自动补编译一次。
+# ============================================================================
+
+name: 0-编译检查（push 自动）
+
+on:
+  push:
+    branches-ignore:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alistlite-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: 1-检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # 仓库里的 gradlew 权限位是 100644（不可执行），Linux runner 上必须先授权
+      - name: 2-赋予 gradlew 执行权限
+        run: chmod +x gradlew
+
+      - name: 3-准备 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 4-安装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: 5-安装 Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.1'
+          cache-dependency-path: AListLib/sources/go.sum
+
+      - name: 6-同步 OpenList 版本号
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          LATEST=$(curl -sL -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/OpenListTeam/OpenList/releases/latest \
+            | grep -o '"tag_name": "[^"]*"' | head -n 1 | cut -d'"' -f4)
+          LATEST=${LATEST#v}
+          if [ -z "$LATEST" ]; then
+            echo "获取 OpenList 版本号失败"
+            exit 1
+          fi
+          echo "OPENLIST_VERSION=$LATEST" >> "$GITHUB_ENV"
+          sed -i "s/\(public static String OPENLIST_VERSION = \"\)\([^\";]*\)\(\";\)/\1$LATEST\3/" \
+            app/src/main/java/com/leohao/android/alistlite/util/Constants.java
+
+      # 只读缓存：优先用发布工作流已构建好的 AAR，命中不到再自己编译
+      - name: 7-恢复 Go 后端缓存（只读）
+        uses: actions/cache/restore@v4
+        with:
+          path: app/libs
+          key: verify-aar-${{ github.run_id }}
+          restore-keys: |
+            alistlib-aar-v2-
+            alistlib-aar-v1-
+
+      - name: 8-缺少 AAR 时补编译 OpenList 后端
+        if: hashFiles('app/libs/*.aar') == ''
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/AListLib/scripts"
+          sh install_alist.sh
+          sh install_gomobile.sh
+          sh build_aar.sh
+          ls -lh "$GITHUB_WORKSPACE/app/libs/"
+
+      - name: 9-运行单元测试
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: 10-打包 release APK（不签名、不发布）
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: 11-列出产物
+        if: always()
+        run: ls -lh app/build/outputs/apk/release/ || true
