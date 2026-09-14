@@ -24,20 +24,26 @@ public class UpdateChecker {
      *
      * @param activity       Activity 上下文
      * @param currentVersion 当前应用版本号
+     * @param interactive    是否由用户主动触发：只有主动触发时才提示"已是最新版本"等结果，
+     *                       启动时的自动检查保持静默，仅在有新版本时弹窗
      */
-    public static void check(Activity activity, String currentVersion) {
+    public static void check(Activity activity, String currentVersion, boolean interactive) {
         new Thread(() -> {
             try {
                 String releaseInfo;
                 try {
                     releaseInfo = MyHttpUtil.request(Constants.URL_RELEASE_LATEST, Method.GET);
                 } catch (Throwable t) {
-                    showToastOnMain(activity, "无法获取更新: " + t.getLocalizedMessage());
+                    if (interactive) {
+                        showToastOnMain(activity, "无法获取更新: " + t.getLocalizedMessage());
+                    }
                     return;
                 }
                 JSONObject release = JSONUtil.parseObj(releaseInfo);
                 if (!release.containsKey("tag_name")) {
-                    showToastOnMain(activity, "未发现新版本信息");
+                    if (interactive) {
+                        showToastOnMain(activity, "未发现新版本信息");
+                    }
                     return;
                 }
 
@@ -62,7 +68,9 @@ public class UpdateChecker {
                                 .show();
                     });
                 } else {
-                    showToastOnMain(activity, String.format("当前已是最新版本（v%s）", currentVersion));
+                    if (interactive) {
+                        showToastOnMain(activity, String.format("当前已是最新版本（v%s）", currentVersion));
+                    }
                 }
             } catch (Exception e) {
                 Log.e(TAG, "check: " + e.getLocalizedMessage());

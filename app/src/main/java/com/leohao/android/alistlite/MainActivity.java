@@ -70,6 +70,10 @@ public class MainActivity extends AppCompatActivity implements OnMenuActionListe
     private ConnectivityManager connectivityManager = null;
     private BroadcastReceiver statusReceiver = null;
     private String currentAppVersion;
+    /**
+     * 自动登录是否已经尝试过（每次启动只尝试一次）
+     */
+    private boolean autoLoginTried = false;
     private ActionBar actionBar = null;
     private WebView webView = null;
     private TextView runningInfoTextView = null;
@@ -346,6 +350,8 @@ public class MainActivity extends AppCompatActivity implements OnMenuActionListe
                                 "})();", null);
                 // 注入油猴脚本（document-end / document-idle 时机）
                 UserscriptInjector.inject(view, url, UserscriptInjector.MODE_END);
+                // 自动登录：登录凭证过期（OpenList 默认 48 小时）或未登录时静默重新登录
+                tryAutoLogin(url);
             }
 
             @Override
@@ -647,62 +653,136 @@ public class MainActivity extends AppCompatActivity implements OnMenuActionListe
      */
     private void performOneClickLogin() {
         try {
-            String serverAddress = alistServer.getServerAddress();
+            final String serverAddress = alistServer.getServerAddress();
+            showToast("正在一键登录");
+            // 在后台线程调用登录 API
+            new Thread(() -> {
+                String token = requestLoginToken(serverAddress);
+                if (token == null) {
+                    runOnUiThread(() -> showToast("一键登录失败：请确认管理员密码与 APP 中设置的一致"));
+                    return;
+                }
+                final String escapedToken = escapeJs(token);
+                runOnUiThread(() -> {
+                    webView.evaluateJavascript(
+                            "localStorage.setItem('token','" + escapedToken + "');", null);
+                    try {
+                        webView.loadUrl(alistServer.getServerAddress());
+                    } catch (IOException e) {
+                        showToast("获取服务地址失败");
+                    }
+                    showToast("一键登录成功");
+                });
+            }).start();
+        } catch (Exception e) {
+            showToast("一键登录失败: " + e.getMessage());
+            Log.e(TAG, "oneClickLogin: ", e);
+        }
+    }
+
+    /**
+     * 自动登录（每次启动至多执行一次）
+     *
+     * <p>OpenList 的登录凭证默认 48 小时过期，过期后 WebView 会回到登录页。
+     * 这里在页面加载完成时检查 localStorage 里的 token 是否仍然可用，
+     * 不可用就用 APP 中保存的管理员密码重新登录并注入新的 token，
+     * 避免每次启动都要手动登录。</p>
+     */
+    private void tryAutoLogin(final String url) {
+        if (autoLoginTried || url == null) {
+            return;
+        }
+        final String serverAddress;
+        try {
+            serverAddress = alistServer.getServerAddress();
+        } catch (Exception e) {
+            return;
+        }
+        // 只有 OpenList 前端页面需要登录，内置的 about 页等直接跳过
+        if (serverAddress == null || !url.startsWith(serverAddress)) {
+            return;
+        }
+        autoLoginTried = true;
+        webView.evaluateJavascript(
+                "(function(){try{return localStorage.getItem('token')||''}catch(e){return ''}})()",
+                value -> {
+                    final String currentToken = value == null ? "" : value.replace("\"", "").trim();
+                    new Thread(() -> {
+                        if (!currentToken.isEmpty() && isTokenValid(serverAddress, currentToken)) {
+                            // 已登录且凭证有效，不做任何事
+                            return;
+                        }
+                        String token = requestLoginToken(serverAddress);
+                        if (token == null) {
+                            Log.w(TAG, "自动登录失败，请确认管理员密码与 APP 中设置的一致");
+                            return;
+                        }
+                        final String escapedToken = escapeJs(token);
+                        runOnUiThread(() -> {
+                            webView.evaluateJavascript(
+                                    "localStorage.setItem('token','" + escapedToken + "');", null);
+                            webView.reload();
+                        });
+                    }).start();
+                });
+    }
+
+    /**
+     * 校验登录凭证是否仍然有效
+     */
+    private boolean isTokenValid(String serverAddress, String token) {
+        try {
+            String response = HttpUtil.createRequest(Method.GET, serverAddress + "/api/me")
+                    .header("Authorization", token)
+                    .execute()
+                    .body();
+            Integer code = JSONUtil.parseObj(response).getInt("code");
+            return code != null && code == 200;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 使用 APP 中保存的管理员密码登录，成功返回新的 token
+     */
+    @Nullable
+    private String requestLoginToken(String serverAddress) {
+        try {
             String username = alistServer.getAdminUser();
             if (username == null || username.isEmpty()) {
-                showToast("无法获取管理员用户名");
-                return;
+                return null;
             }
             String password = SharedDataHelper.getInstance()
                     .getStringShareData(Constants.ANDROID_SHARED_DATA_KEY_ADMIN_PASSWORD);
             if (password == null || password.isEmpty()) {
                 password = Constants.ALIST_DEFAULT_PASSWORD;
             }
-            final String apiUrl = serverAddress + "/api/auth/login";
-            final String finalPassword = password;
-            showToast("正在一键登录");
-            // 在后台线程调用登录 API
-            new Thread(() -> {
-                try {
-                    JSONObject requestBody = JSONUtil.createObj()
-                            .set("username", username)
-                            .set("password", finalPassword);
-                    String response = HttpUtil.createRequest(Method.POST, apiUrl)
-                            .body(requestBody.toString())
-                            .execute()
-                            .body();
-                    JSONObject json = JSONUtil.parseObj(response);
-                    if (json.getInt("code") != 200) {
-                        runOnUiThread(() -> showToast("一键登录失败：" + json.getStr("message", "未知错误")));
-                        return;
-                    }
-                    String token = json.getJSONObject("data").getStr("token");
-                    if (token == null || token.isEmpty()) {
-                        runOnUiThread(() -> showToast("一键登录失败：无法获取登录凭证"));
-                        return;
-                    }
-                    final String escapedToken = token.replace("\\", "\\\\").replace("'", "\\'");
-                    runOnUiThread(() -> {
-                        webView.evaluateJavascript(
-                                "localStorage.setItem('token','" + escapedToken + "');", null);
-                        try {
-                            webView.loadUrl(alistServer.getServerAddress());
-                        } catch (IOException e) {
-                            showToast("获取服务地址失败");
-                        }
-                        showToast("一键登录成功");
-                    });
-                } catch (Exception e) {
-                    runOnUiThread(() -> {
-                        showToast("一键登录失败：" + e.getMessage());
-                        Log.e(TAG, "oneClickLogin: ", e);
-                    });
-                }
-            }).start();
+            JSONObject requestBody = JSONUtil.createObj()
+                    .set("username", username)
+                    .set("password", password);
+            String response = HttpUtil.createRequest(Method.POST, serverAddress + "/api/auth/login")
+                    .body(requestBody.toString())
+                    .execute()
+                    .body();
+            JSONObject json = JSONUtil.parseObj(response);
+            Integer code = json.getInt("code");
+            if (code == null || code != 200) {
+                return null;
+            }
+            String token = json.getJSONObject("data").getStr("token");
+            return token == null || token.isEmpty() ? null : token;
         } catch (Exception e) {
-            showToast("一键登录失败: " + e.getMessage());
-            Log.e(TAG, "oneClickLogin: ", e);
+            Log.w(TAG, "登录失败: " + e.getLocalizedMessage());
+            return null;
         }
+    }
+
+    /**
+     * 转义要放进 JS 字符串字面量里的内容
+     */
+    private static String escapeJs(String text) {
+        return text.replace("\\", "\\\\").replace("'", "\\'");
     }
 
     @Override
@@ -740,9 +820,12 @@ public class MainActivity extends AppCompatActivity implements OnMenuActionListe
         webView.loadUrl("http://127.0.0.1:4015");
     }
 
+    /**
+     * 检查更新：view 为空表示启动时的自动检查（不打扰用户），非空表示用户从菜单主动触发
+     */
     @Override
     public void checkUpdates(View view) {
-        UpdateChecker.check(this, currentAppVersion);
+        UpdateChecker.check(this, currentAppVersion, view != null);
     }
 
     @Override
