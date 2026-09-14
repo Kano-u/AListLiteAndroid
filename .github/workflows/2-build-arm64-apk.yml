@@ -13,6 +13,10 @@ name: 2-编译并发布 arm64 APK
 
 on:
   workflow_dispatch:
+  # 也可以推一个 build-* 标签来触发发布（例如 git push origin build-20260914）
+  push:
+    tags:
+      - 'build-*'
 
 permissions:
   contents: write
